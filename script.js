@@ -11,6 +11,7 @@ let searchFilter = '';
 // DOM elements
 const form = document.getElementById('dataForm');
 const dataTypeSelect = document.getElementById('dataType');
+const chartTypeSelect = document.getElementById('chartType');
 const chartContainer = document.getElementById('chart');
 const tableContainer = document.getElementById('tableContainer');
 const tooltip = document.getElementById('tooltip');
@@ -58,7 +59,12 @@ function setupEventListeners() {
     // Handle window resize
     window.addEventListener('resize', function() {
         if (currentData && currentData.length > 0) {
-            createBubbleChart();
+            const chartType = chartTypeSelect.value || 'bubble';
+            if (chartType === 'treemap') {
+                createTreemapChart();
+            } else {
+                createBubbleChart();
+            }
         }
     });
     
@@ -70,6 +76,18 @@ function setupEventListeners() {
             changePage(currentPage - 1);
         } else if (e.key === 'ArrowRight' && currentPage < Math.ceil(filteredData.length / itemsPerPage)) {
             changePage(currentPage + 1);
+        }
+    });
+    
+    // Handle chart type changes
+    chartTypeSelect.addEventListener('change', function() {
+        if (currentData && currentData.length > 0) {
+            const chartType = this.value;
+            if (chartType === 'treemap') {
+                createTreemapChart();
+            } else {
+                createBubbleChart();
+            }
         }
     });
 }
@@ -119,7 +137,15 @@ function updateVisualization(dataType) {
         
         updatePagination();
         updateCurrentData();
-        createBubbleChart();
+        
+        // Create chart based on selected type
+        const chartType = chartTypeSelect.value || 'bubble';
+        if (chartType === 'treemap') {
+            createTreemapChart();
+        } else {
+            createBubbleChart();
+        }
+        
         createDataTable();
         createChartStats();
         
@@ -216,7 +242,7 @@ function processRegionData(dataType) {
         .sort((a, b) => b.value - a.value);
 }
 
-// Create bubble chart using D3.js
+// Create bubble chart using D3.js with force simulation to prevent overlapping
 function createBubbleChart() {
     // Clear previous chart
     chartContainer.innerHTML = '';
@@ -231,7 +257,7 @@ function createBubbleChart() {
     }
     
     // Chart dimensions
-    const margin = { top: 40, right: 20, bottom: 40, left: 60 };
+    const margin = { top: 40, right: 20, bottom: 40, left: 20 };
     const width = chartContainer.clientWidth - margin.left - margin.right;
     const height = 500 - margin.top - margin.bottom;
     
@@ -243,60 +269,38 @@ function createBubbleChart() {
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
     
-    // Scales
-    const xScale = d3.scaleLinear()
-        .domain([0, d3.max(currentData, d => d.value)])
-        .range([0, width]);
-    
-    const yScale = d3.scaleLinear()
-        .domain([0, d3.max(currentData, d => d.value)])
-        .range([height, 0]);
-    
+    // Radius scale for bubbles - larger range so names fit better
     const radiusScale = d3.scaleSqrt()
         .domain([0, d3.max(currentData, d => d.value)])
-        .range([8, 60]);
+        .range([12, 60]);
     
-    // Add X axis with better formatting
-    const xAxis = d3.axisBottom(xScale)
-        .tickFormat(d => d3.format('.2s')(d));
-    
-    svg.append('g')
-        .attr('transform', `translate(0,${height})`)
-        .call(xAxis);
-    
-    // Add Y axis with better formatting
-    const yAxis = d3.axisLeft(yScale)
-        .tickFormat(d => d3.format('.2s')(d));
-    
-    svg.append('g')
-        .call(yAxis);
-    
-    // Add axis labels
+    // Add chart title
     svg.append('text')
-        .attr('transform', `translate(${width/2}, ${height + margin.bottom - 5})`)
-        .style('text-anchor', 'middle')
-        .style('font-size', '14px')
-        .style('fill', '#666')
-        .text(getAxisLabel());
+        .attr('x', width / 2)
+        .attr('y', -20)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '18px')
+        .attr('font-weight', 'bold')
+        .attr('fill', '#2c3e50')
+        .text(getChartTitle());
     
-    svg.append('text')
-        .attr('transform', 'rotate(-90)')
-        .attr('y', 0 - margin.left + 20)
-        .attr('x', 0 - (height / 2))
-        .attr('dy', '1em')
-        .style('text-anchor', 'middle')
-        .style('font-size', '14px')
-        .style('fill', '#666')
-        .text('Value');
+    // Create force simulation with adaptive parameters based on data size
+    const dataSize = currentData.length;
+    const chargeStrength = dataSize > 100 ? 2 : dataSize > 50 ? 3 : 5;
+    const collisionPadding = dataSize > 100 ? 2 : dataSize > 50 ? 3 : 4;
     
-    // Add bubbles with animation
+    const simulation = d3.forceSimulation(currentData)
+        .force('charge', d3.forceManyBody().strength(chargeStrength))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => radiusScale(d.value) + collisionPadding))
+        .on('tick', ticked);
+    
+    // Add bubbles
     const bubbles = svg.selectAll('.bubble')
         .data(currentData)
         .enter()
         .append('circle')
         .attr('class', 'bubble')
-        .attr('cx', d => xScale(d.value))
-        .attr('cy', d => yScale(d.value))
         .attr('r', 0) // Start with radius 0
         .attr('fill', (d, i) => d3.schemeCategory10[i % 10])
         .attr('opacity', 0) // Start with opacity 0
@@ -311,6 +315,34 @@ function createBubbleChart() {
             d3.select(this).attr('opacity', 0.8).attr('stroke-width', 2);
         });
     
+    // Add labels for ALL bubbles (not just large ones)
+    const labels = svg.selectAll('.bubble-label')
+        .data(currentData)
+        .enter()
+        .append('text')
+        .attr('class', 'bubble-label')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.3em')
+        .attr('font-size', d => Math.max(11, Math.min(16, radiusScale(d.value) / 2.5))) // Adaptive font size for larger bubbles
+        .attr('fill', 'white')
+        .attr('font-weight', 'bold')
+        .attr('text-shadow', '1px 1px 3px rgba(0,0,0,0.9), -1px -1px 3px rgba(0,0,0,0.9)')
+        .attr('opacity', 0)
+        .text(d => {
+            const name = d.label;
+            const radius = radiusScale(d.value);
+            // For larger bubbles, show more complete names
+            if (radius < 25) {
+                return name.length > 8 ? name.substring(0, 6) + '...' : name;
+            } else if (radius < 40) {
+                return name.length > 12 ? name.substring(0, 10) + '...' : name;
+            } else if (radius < 50) {
+                return name.length > 15 ? name.substring(0, 13) + '...' : name;
+            } else {
+                return name.length > 18 ? name.substring(0, 16) + '...' : name;
+            }
+        });
+    
     // Animate bubbles appearing
     bubbles.transition()
         .duration(1000)
@@ -318,28 +350,101 @@ function createBubbleChart() {
         .attr('r', d => radiusScale(d.value))
         .attr('opacity', 0.8);
     
-    // Add labels for larger bubbles with animation
-    const labels = svg.selectAll('.bubble-label')
-        .data(currentData.filter(d => radiusScale(d.value) > 25))
-        .enter()
-        .append('text')
-        .attr('class', 'bubble-label')
-        .attr('x', d => xScale(d.value))
-        .attr('y', d => yScale(d.value))
-        .attr('text-anchor', 'middle')
-        .attr('dy', '0.35em')
-        .attr('font-size', '12px')
-        .attr('fill', 'white')
-        .attr('font-weight', 'bold')
-        .attr('text-shadow', '1px 1px 2px rgba(0,0,0,0.8)')
-        .attr('opacity', 0)
-        .text(d => d.label.length > 15 ? d.label.substring(0, 12) + '...' : d.label);
-    
     // Animate labels appearing
     labels.transition()
         .duration(800)
         .delay((d, i) => 1000 + (i * 30))
         .attr('opacity', 1);
+    
+    // Legend removed - no more small/medium/large circles on bottom right
+    // createBubbleLegend(svg, width, height, radiusScale);
+    
+    // Tick function for force simulation
+    function ticked() {
+        bubbles
+            .attr('cx', d => Math.max(radiusScale(d.value), Math.min(width - radiusScale(d.value), d.x)))
+            .attr('cy', d => Math.max(radiusScale(d.value), Math.min(height - radiusScale(d.value), d.y)));
+        
+        // Position labels at the center of each bubble
+        labels
+            .attr('x', d => Math.max(radiusScale(d.value), Math.min(width - radiusScale(d.value), d.x)))
+            .attr('y', d => Math.max(radiusScale(d.value), Math.min(height - radiusScale(d.value), d.y)));
+    }
+    
+    // Stop simulation after a few seconds to save performance
+    // For larger datasets, run longer to ensure proper positioning
+    const simulationTime = dataSize > 100 ? 5000 : dataSize > 50 ? 4000 : 3000;
+    setTimeout(() => {
+        simulation.stop();
+    }, simulationTime);
+}
+
+// Create bubble legend
+function createBubbleLegend(svg, width, height, radiusScale) {
+    const legendData = [
+        { label: 'Small', value: radiusScale.domain()[1] * 0.1 },
+        { label: 'Medium', value: radiusScale.domain()[1] * 0.5 },
+        { label: 'Large', value: radiusScale.domain()[1] * 0.9 }
+    ];
+    
+    const legendGroup = svg.append('g')
+        .attr('class', 'legend')
+        .attr('transform', `translate(${width - 100}, ${height - 120})`);
+    
+    legendGroup.append('text')
+        .attr('x', 0)
+        .attr('y', -10)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '12px')
+        .attr('font-weight', 'bold')
+        .attr('fill', '#666')
+        .text('Bubble Size');
+    
+    legendData.forEach((d, i) => {
+        const legendItem = legendGroup.append('g')
+            .attr('transform', `translate(0, ${i * 25})`);
+        
+        legendItem.append('circle')
+            .attr('r', radiusScale(d.value))
+            .attr('fill', '#ddd')
+            .attr('stroke', '#999')
+            .attr('stroke-width', 1);
+        
+        legendItem.append('text')
+            .attr('x', radiusScale(d.value) + 15)
+            .attr('y', 4)
+            .attr('font-size', '11px')
+            .attr('fill', '#666')
+            .text(d.label);
+    });
+}
+
+// Create treemap chart as alternative visualization
+function createTreemapChart() {
+    // Clear previous chart
+    chartContainer.innerHTML = '';
+    
+    if (!currentData || currentData.length === 0) {
+        if (searchFilter && filteredData.length === 0) {
+            chartContainer.innerHTML = '<div style="text-align: center; padding: 50px; color: #e74c3c;"><p>No data found matching your search criteria.</p><p>Try adjusting your search term or clearing the filter.</p></div>';
+        } else {
+            chartContainer.innerHTML = '<div style="text-align: center; padding: 50px;"><p>No data available for the selected option.</p></div>';
+        }
+        return;
+    }
+    
+    // Chart dimensions
+    const margin = { top: 40, right: 20, bottom: 40, left: 20 };
+    const width = chartContainer.clientWidth - margin.left - margin.right;
+    const height = 500 - margin.top - margin.bottom;
+    
+    // Create SVG
+    const svg = d3.select(chartContainer)
+        .append('svg')
+        .attr('width', width + margin.left + margin.right)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
     
     // Add chart title
     svg.append('text')
@@ -349,7 +454,93 @@ function createBubbleChart() {
         .attr('font-size', '18px')
         .attr('font-weight', 'bold')
         .attr('fill', '#2c3e50')
-        .text(getChartTitle());
+        .text(getChartTitle() + ' (Treemap View)');
+    
+    // Prepare data for treemap
+    const treemapData = {
+        name: 'root',
+        children: currentData.map(d => ({
+            name: d.label,
+            value: d.value,
+            originalData: d
+        }))
+    };
+    
+    // Create treemap layout
+    const treemap = d3.treemap()
+        .size([width, height])
+        .padding(2)
+        .round(true);
+    
+    // Apply treemap layout
+    const root = d3.hierarchy(treemapData)
+        .sum(d => d.value)
+        .sort((a, b) => b.value - a.value);
+    
+    treemap(root);
+    
+    // Create treemap rectangles
+    const nodes = svg.selectAll('.treemap-node')
+        .data(root.leaves())
+        .enter()
+        .append('g')
+        .attr('class', 'treemap-node')
+        .attr('transform', d => `translate(${d.x0},${d.y0})`)
+        .on('mouseover', function(event, d) {
+            showTooltip(event, d.data.originalData);
+            d3.select(this).select('rect').attr('stroke-width', 3);
+        })
+        .on('mouseout', function() {
+            hideTooltip();
+            d3.select(this).select('rect').attr('stroke-width', 1);
+        });
+    
+    // Add rectangles
+    nodes.append('rect')
+        .attr('width', d => d.x1 - d.x0)
+        .attr('height', d => d.y1 - d.y0)
+        .attr('fill', (d, i) => d3.schemeCategory10[i % 10])
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1)
+        .attr('opacity', 0)
+        .transition()
+        .duration(800)
+        .delay((d, i) => i * 50)
+        .attr('opacity', 0.8);
+    
+    // Add labels only for rectangles large enough to display text
+    nodes.filter(d => (d.x1 - d.x0) > 30 && (d.y1 - d.y0) > 20)
+        .append('text')
+        .attr('x', 5)
+        .attr('y', 15)
+        .attr('font-size', '11px')
+        .attr('fill', 'white')
+        .attr('font-weight', 'bold')
+        .attr('text-shadow', '1px 1px 2px rgba(0,0,0,0.8)')
+        .attr('opacity', 0)
+        .text(d => {
+            const name = d.data.name;
+            const maxWidth = d.x1 - d.x0 - 10;
+            return name.length > maxWidth / 6 ? name.substring(0, Math.floor(maxWidth / 6)) + '...' : name;
+        })
+        .transition()
+        .duration(600)
+        .delay((d, i) => 800 + (i * 30))
+        .attr('opacity', 1);
+    
+    // Add value labels for larger rectangles
+    nodes.filter(d => (d.x1 - d.x0) > 80 && (d.y1 - d.y0) > 30)
+        .append('text')
+        .attr('x', 5)
+        .attr('y', 30)
+        .attr('font-size', '10px')
+        .attr('fill', 'white')
+        .attr('opacity', 0)
+        .text(d => d3.format('.2s')(d.data.value))
+        .transition()
+        .duration(600)
+        .delay((d, i) => 1000 + (i * 30))
+        .attr('opacity', 0.9);
 }
 
 // Create data table
@@ -466,7 +657,7 @@ function showTooltip(event, data) {
     tooltip.innerHTML = tooltipContent;
     tooltip.classList.add('show');
     
-    // Position tooltip
+    // Position tooltip with better logic to avoid going off-screen
     const rect = event.target.getBoundingClientRect();
     const tooltipWidth = tooltip.offsetWidth;
     const tooltipHeight = tooltip.offsetHeight;
@@ -474,10 +665,27 @@ function showTooltip(event, data) {
     let left = rect.left + rect.width / 2 - tooltipWidth / 2;
     let top = rect.top - tooltipHeight - 10;
     
-    // Ensure tooltip doesn't go off-screen
+    // Ensure tooltip doesn't go off-screen horizontally
     if (left < 10) left = 10;
     if (left + tooltipWidth > window.innerWidth - 10) left = window.innerWidth - tooltipWidth - 10;
-    if (top < 10) top = rect.bottom + 10;
+    
+    // Ensure tooltip doesn't go off-screen vertically - prefer below the bubble
+    if (top < 10) {
+        // If above doesn't fit, try below
+        top = rect.bottom + 10;
+        // If below also doesn't fit, try to the side
+        if (top + tooltipHeight > window.innerHeight - 10) {
+            if (rect.left > tooltipWidth + 20) {
+                // Position to the left of the bubble
+                left = rect.left - tooltipWidth - 10;
+                top = rect.top + rect.height / 2 - tooltipHeight / 2;
+            } else if (rect.right + tooltipWidth + 20 < window.innerWidth) {
+                // Position to the right of the bubble
+                left = rect.right + 10;
+                top = rect.top + rect.height / 2 - tooltipHeight / 2;
+            }
+        }
+    }
     
     tooltip.style.left = left + 'px';
     tooltip.style.top = top + 'px';
@@ -626,7 +834,15 @@ function filterData(searchTerm) {
     currentPage = 1; // Reset to first page
     updatePagination();
     updateCurrentData();
-    createBubbleChart();
+    
+    // Create chart based on selected type
+    const chartType = chartTypeSelect.value || 'bubble';
+    if (chartType === 'treemap') {
+        createTreemapChart();
+    } else {
+        createBubbleChart();
+    }
+    
     createDataTable();
     createChartStats();
 }
@@ -775,7 +991,15 @@ function changePage(page) {
         currentPage = page;
         updateCurrentData();
         updatePagination();
-        createBubbleChart();
+        
+        // Create chart based on selected type
+        const chartType = chartTypeSelect.value || 'bubble';
+        if (chartType === 'treemap') {
+            createTreemapChart();
+        } else {
+            createBubbleChart();
+        }
+        
         createDataTable();
         createChartStats();
     }
@@ -790,7 +1014,15 @@ function changeItemsPerPage(newItemsPerPage) {
     currentPage = 1; // Reset to first page
     updatePagination();
     updateCurrentData();
-    createBubbleChart();
+    
+    // Create chart based on selected type
+    const chartType = chartTypeSelect.value || 'bubble';
+    if (chartType === 'treemap') {
+        createTreemapChart();
+    } else {
+        createBubbleChart();
+    }
+    
     createDataTable();
     createChartStats();
 }

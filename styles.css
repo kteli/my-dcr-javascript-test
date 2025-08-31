@@ -269,7 +269,7 @@ button:active {
 }
 
 .tooltip {
-    position: absolute;
+    position: fixed;
     background: rgba(0, 0, 0, 0.95);
     color: white;
     padding: 15px;
@@ -278,10 +278,10 @@ button:active {
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.3s ease;
-    z-index: 1000;
+    z-index: 10000;
     max-width: 320px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
     backdrop-filter: blur(10px);
 }
 
@@ -331,13 +331,62 @@ tr:nth-child(even):hover {
     background-color: #f1f3f4;
 }
 
+/* Chart and visualization styles */
 .bubble {
     cursor: pointer;
-    transition: opacity 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 .bubble:hover {
-    opacity: 0.8;
+    stroke-width: 3px !important;
+    stroke: #2c3e50 !important;
+}
+
+.bubble-label {
+    pointer-events: none;
+    user-select: none;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-weight: 600;
+}
+
+.legend {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.legend text {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Treemap styles */
+.treemap-node {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.treemap-node:hover rect {
+    stroke-width: 3px !important;
+    stroke: #2c3e50 !important;
+}
+
+.treemap-node text {
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Chart type selector styling */
+#chartType {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+#chartType:focus {
+    border-color: #17a2b8;
+    background-color: white;
 }
 
 @media (max-width: 768px) {
