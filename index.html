@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Country Data Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Country Data Visualization</h1>
+        
+        <!-- Form Section -->
+        <div class="form-section">
+            <h2>Select Data to Visualize</h2>
+            <form id="dataForm">
+                <div class="form-group">
+                    <label for="dataType">Data Type:</label>
+                    <select id="dataType" name="dataType" required>
+                        <option value="">Select data type...</option>
+                        <optgroup label="By Country">
+                            <option value="population">Population Size</option>
+                            <option value="borders">Number of Borders</option>
+                            <option value="timezones">Number of Timezones</option>
+                            <option value="languages">Number of Languages</option>
+                        </optgroup>
+                        <optgroup label="By Region">
+                            <option value="region-countries">Number of Countries in Region</option>
+                            <option value="region-timezones">Number of Unique Timezones in Region</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="searchFilter">Search/Filter:</label>
+                    <div class="search-container">
+                        <input type="text" id="searchFilter" placeholder="Search countries or regions..." oninput="filterData(this.value)">
+                        <button type="button" id="clearFilter" onclick="clearFilter()" class="clear-filter-btn">Clear</button>
+                    </div>
+                </div>
+                <button type="submit">Update Chart</button>
+            </form>
+            <div id="loadingProgress" class="loading-progress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <p>Processing data...</p>
+            </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="chart-section">
+            <h2>Bubble Chart</h2>
+            <div id="searchResults" class="search-results"></div>
+            <div id="chart"></div>
+            <div id="chartStats" class="chart-stats"></div>
+            <div id="pagination" class="pagination"></div>
+        </div>
+
+        <!-- Table Section -->
+        <div class="table-section">
+            <h2>Data Table</h2>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
